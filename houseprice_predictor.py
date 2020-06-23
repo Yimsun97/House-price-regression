@@ -118,4 +118,5 @@ print("[INFO]---BLE---------")
 model_evaluation(train_y, train_pred_blending, val_y, val_pred_blending, cs_y)
 pred_test_vis(val_pred_blending, val_y)
 
+# save the data
 save_data(test_x, blending, cs_y)
