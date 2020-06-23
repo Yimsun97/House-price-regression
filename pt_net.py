@@ -28,11 +28,13 @@ class RegressionNet(nn.Module):
 
     def __init__(self, num_in, *args):
         super().__init__()
-        self.hidden_list = list(args)
+        self.num_in = num_in
+        self.args = args
+        self.hidden_list = list(self.args)
         for i, hidden in enumerate(self.hidden_list):
             if i == 0:
                 self.__setattr__(f'hidden_{i}',
-                                 nn.Linear(num_in, self.hidden_list[i]))
+                                 nn.Linear(self.num_in, self.hidden_list[i]))
             elif i < len(self.hidden_list):
                 self.__setattr__(f'hidden_{i}',
                                  nn.Linear(self.hidden_list[i - 1], self.hidden_list[i]))
@@ -41,6 +43,8 @@ class RegressionNet(nn.Module):
 
         self.dropout = nn.Dropout(0.1)
         self.output = nn.Linear(self.hidden_list[-1], 1)
+        self.train_loss_list = []
+        self.val_loss_list = []
 
     def forward(self, x):
         for i, hidden in enumerate(self.hidden_list):
@@ -53,44 +57,64 @@ class RegressionNet(nn.Module):
         x = self.output(x)
         return x
 
-    def to_model(self, x):
+    def fit(self, train_x, train_y, num_batch=5, num_epoch=200, loss_fun=None,
+            optimizer=None, test_x=None, test_y=None):
+        if loss_fun is None:
+            raise ValueError("loss function is required for nn")
+
+        if optimizer is None:
+            raise ValueError("optimizer is required for nn")
+
+        if isinstance(train_x, np.ndarray):
+            train_x = torch.from_numpy(train_x).float()
+        if isinstance(train_y, np.ndarray):
+            train_y = torch.from_numpy(train_y).float()
+
+        # generate the data loader
+        torch_dataset = Data.TensorDataset(train_x, train_y)
+        loader = Data.DataLoader(
+            dataset=torch_dataset,  # torch TensorDataset format
+            batch_size=num_batch,  # mini batch size
+            shuffle=True,  # shuffle the data or not (shuffle=True is better)
+        )
+
+        # record the loss
+        train_loss_list = []
+        val_loss_list = []
+
+        # train the model and calculate train loss and validation loss
+        for epoch in range(num_epoch):
+            batch_loss_accumulator = 0.0
+            for batch, (batch_x, batch_y) in enumerate(loader):
+                self.train()
+                batch_pred = self.forward(batch_x)
+                batch_loss = loss_fun(batch_pred, batch_y)
+                batch_loss_accumulator += batch_loss.item() * batch_x.size(0)
+
+                optimizer.zero_grad()
+                batch_loss.backward()
+                optimizer.step()
+
+            train_loss_list.append(batch_loss_accumulator / train_x.size(0))
+
+            if (test_x is not None) and (test_y is not None):
+                self.eval()
+                if isinstance(test_x, np.ndarray):
+                    test_x = torch.from_numpy(test_x).float()
+                if isinstance(test_y, np.ndarray):
+                    test_y = torch.from_numpy(test_y).float()
+
+                val_pred = self.forward(test_x)
+                val_loss = loss_fun(val_pred, test_y)
+                val_loss_list.append(val_loss.item())
+
+        self.train_loss_list += train_loss_list
+        if (test_x is not None) and (test_y is not None):
+            self.val_loss_list += val_loss_list
+
+        return self
+
+    def predict(self, data):
         self.eval()
-        return self.forward(torch.from_numpy(np.array(x)).float()).detach().numpy()
+        return self.forward(torch.from_numpy(np.array(data)).float()).detach().numpy()
 
-
-def net_train(net, train_x, train_y, num_batch, num_epoch, loss_fun, optimizer,
-              test_x=None, test_y=None):
-    # generate the data loader
-    torch_dataset = Data.TensorDataset(train_x, train_y)
-    loader = Data.DataLoader(
-        dataset=torch_dataset,  # torch TensorDataset format
-        batch_size=num_batch,  # mini batch size
-        shuffle=True,  # shuffle the data or not (shuffle=True is better)
-    )
-
-    # record the loss
-    train_loss_list = []
-    val_loss_list = []
-
-    # train the model and calculate train loss and validation loss
-    for epoch in range(num_epoch):
-        batch_loss_accumulator = 0.0
-        for batch, (batch_x, batch_y) in enumerate(loader):
-            net.train()
-            batch_pred = net(batch_x)
-            batch_loss = loss_fun(batch_pred, batch_y)
-            batch_loss_accumulator += batch_loss.item() * batch_x.size(0)
-
-            optimizer.zero_grad()
-            batch_loss.backward()
-            optimizer.step()
-
-        train_loss_list.append(batch_loss_accumulator / train_x.size(0))
-
-        if not(test_x is None) and not(test_y is None):
-            net.eval()
-            val_pred = net(test_x)
-            val_loss = loss_fun(val_pred, test_y)
-            val_loss_list.append(val_loss.item())
-
-    return net, train_loss_list, val_loss_list

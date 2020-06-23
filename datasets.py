@@ -152,16 +152,6 @@ def cal_rms(y_true, y_pred, cs_y):
     return np.sqrt(mse)
 
 
-def save_data(test_x, model, cs_y):
-    test_y = model(test_x).reshape(-1, 1)
-    test_y_inv = cs_y.inverse_transform(test_y)
-    test_y_inv = np.exp(test_y_inv)
-    id = np.arange(1461, 2920)
-    output = pd.DataFrame({'Id': id, 'SalePrice': test_y_inv.ravel()})
-    output.to_csv('my_submission.csv', index=False)
-    print("Your submission was successfully saved!")
-
-
 def cal_pearsonr(x, y):
     if len(x.shape) > 1:
         x = x.ravel()
@@ -190,3 +180,14 @@ def model_evaluation(train_y, train_pred, val_y, val_pred, cs_y):
     print("[INFO] training RMSE: {:.6f}".format(cal_rms(train_y, train_pred, cs_y)))
     print("[INFO] validation RMSE: {:.6f}".format(cal_rms(val_y, val_pred, cs_y)))
     pass
+
+
+def save_data(test_x, model, cs_y):
+    test_y = model(test_x).reshape(-1, 1)
+    test_y_inv = cs_y.inverse_transform(test_y)
+    test_y_inv = np.exp(test_y_inv)
+    id = np.arange(1461, 2920)
+    output = pd.DataFrame({'Id': id, 'SalePrice': test_y_inv.ravel()})
+    output.to_csv('my_submission.csv', index=False)
+    print("Your submission was successfully saved!")
+
