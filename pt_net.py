@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as Data
+from sklearn.base import BaseEstimator, RegressorMixin
 
 
 class OldRegressionNet(nn.Module):
@@ -24,7 +25,7 @@ class OldRegressionNet(nn.Module):
         return x_out
 
 
-class RegressionNet(nn.Module):
+class RegressionNet(nn.Module, BaseEstimator, RegressorMixin):
 
     def __init__(self, num_in, *args):
         super().__init__()
@@ -57,13 +58,16 @@ class RegressionNet(nn.Module):
         x = self.output(x)
         return x
 
-    def fit(self, train_x, train_y, num_batch=5, num_epoch=200, loss_fun=None,
-            optimizer=None, test_x=None, test_y=None):
+    def fit(self, train_x, train_y, num_batch=5, num_epoch=200, weight_decay=7e-4,
+            loss_fun=None, optimizer=None, test_x=None, test_y=None):
         if loss_fun is None:
-            raise ValueError("loss function is required for nn")
+            loss_fun = torch.nn.MSELoss()
 
         if optimizer is None:
-            raise ValueError("optimizer is required for nn")
+            optimizer = torch.optim.Adam(self.parameters(), weight_decay=weight_decay)
+
+        if len(train_y.shape) == 1:
+            train_y = train_y.reshape(-1, 1)
 
         if isinstance(train_x, np.ndarray):
             train_x = torch.from_numpy(train_x).float()
@@ -116,5 +120,20 @@ class RegressionNet(nn.Module):
 
     def predict(self, data):
         self.eval()
-        return self.forward(torch.from_numpy(np.array(data)).float()).detach().numpy()
+        return self.forward(torch.from_numpy(np.array(data)).float())\
+            .detach().numpy().ravel()
+
+
+class SKRegressionNet(RegressionNet):
+
+    def __init__(self, num_in, num_h1, num_h2, num_h3):
+        super().__init__(num_in, num_h1, num_h2, num_h3)
+        self.num_in = num_in
+        self.num_h1 = num_h1
+        self.num_h2 = num_h2
+        self.num_h3 = num_h3
+
+    def get_params(self, deep=True):
+        return {'num_in': self.num_in, 'num_h1': self.num_h1,
+                'num_h2': self.num_h2, 'num_h3': self.num_h3}
 
